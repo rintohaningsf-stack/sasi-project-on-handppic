@@ -31,7 +31,8 @@ object AppIcons {
     } }
     /** Icon jam (On Schedule): lingkaran hijau dengan jarum jam berlubang (even-odd). */
     val CheckCircle: ImageVector by lazy { vec("CheckCircle", 24f, 24f) {
-        p("M12 2a10 10 0 100 20 10 10 0 000-20zm1 5v5.4l3.6 2.1-.8 1.4L11 13V7h2z", fill = Color(0xFF16C55E), eo = true)
+        p("M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z", stroke = Color(0xFF16C55E), sw = 2.2f, round = true)
+        p("M12 7v5l3.2 2", stroke = Color(0xFF16C55E), sw = 2.2f, round = true)
     } }
     val Warning: ImageVector by lazy { vec("Warning", 24f, 24f) {
         p("M12 3L1.5 21h21L12 3zm1 14h-2v-2h2v2zm0-4h-2V9h2v4z", fill = Color(0xFFF85555))
@@ -73,7 +74,8 @@ object AppIcons {
     } }
     /** Icon jam (Overdue Project): lingkaran merah dengan jarum jam berlubang (even-odd). */
     val Overdue: ImageVector by lazy { vec("Overdue", 24f, 24f) {
-        p("M12 2a10 10 0 100 20 10 10 0 000-20zm1 5v5.3l3.8 2.3-.9 1.5L11 13.4V7h2z", fill = Color(0xFFF04438), eo = true)
+        p("M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z", stroke = Color(0xFFF04438), sw = 2.2f, round = true)
+        p("M12 7v5l3.2 2", stroke = Color(0xFFF04438), sw = 2.2f, round = true)
     } }
     val Delay: ImageVector by lazy { vec("Delay", 24f, 24f) {
         p("M12 3L1.5 21h21L12 3zm1.1 14.2h-2.2v-2.2h2.2v2.2zm0-4h-2.2V9h2.2v4.2z", fill = Color(0xFFEB8D04))
@@ -111,12 +113,13 @@ object AppIcons {
         p("M7.476 0L0.976 0C0.377 0 -0.122 0.493 0.026 1.073C0.184 1.687 0.474 2.259 0.876 2.749C1.278 3.239 1.783 3.635 2.354 3.91C2.8 4.123 3.142 4.542 3.142 5.036L3.142 8.332C3.142 8.424 3.166 8.515 3.211 8.596C3.256 8.676 3.321 8.744 3.399 8.792C3.478 8.841 3.568 8.869 3.66 8.873C3.752 8.877 3.844 8.857 3.926 8.816L5.01 8.275C5.1 8.23 5.175 8.16 5.228 8.075C5.281 7.989 5.309 7.891 5.309 7.79L5.309 5.036C5.309 4.542 5.651 4.123 6.097 3.91C6.668 3.635 7.173 3.239 7.576 2.749C7.978 2.259 8.268 1.687 8.426 1.073C8.573 0.493 8.073 0 7.476 0Z", stroke = Color(0xFF045FF1), sw = 1.2f, round = true)
     } }
     val ShowLess: ImageVector by lazy { vec("ShowLess", 20f, 20f) {
-        p("M10 18a8 8 0 100-16 8 8 0 000 16zM7 9a1 1 0 000 2h6a1 1 0 100-2H7z", fill = Color(0xFFF59E0B), eo = true)
+        p("M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM7 11h10v2H7z", fill = Color(0xFFF59E0B), eo = true)
     } }
-    val ShowMore: ImageVector by lazy { vec("ShowMore", 20f, 20f) {
-        p("M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z", fill = Color(0xFF2563EB), eo = true)
+    val ShowMore: ImageVector by lazy { vec("ShowMore", 24f, 24f) {
+        p("M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z", fill = Color(0xFF0799EC), eo = true)
     } }
     val ShowAll: ImageVector by lazy { vec("ShowAll", 24f, 24f) {
-        p("M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4", stroke = Color(0xFF059669), sw = 2f, round = true)
+        p("M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2H5a2 2 0 0 1 -2 -2V5a2 2 0 0 1 2 -2z", stroke = Color(0xFF16C784), sw = 1.8f, round = true)
+        p("M8 16l8-8M10 8h6v6", stroke = Color(0xFF16C784), sw = 1.8f, round = true)
     } }
 }
