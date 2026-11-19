@@ -20,6 +20,10 @@ class PohState(private val scope: CoroutineScope) {
     /** Pencarian nomor project (parameter `search`). */
     var query by mutableStateOf(""); private set
 
+    /** Periode order date (yyyy-MM-dd). null = ikut default server. */
+    var start by mutableStateOf<String?>(null); private set
+    var finish by mutableStateOf<String?>(null); private set
+
     /** Satu filter pilihan aktif: kind = bucket | status | sales | pic. Menekan lagi = lepas. */
     var fKind by mutableStateOf<String?>(null); private set
     var fValue by mutableStateOf<String?>(null); private set
@@ -51,8 +55,13 @@ class PohState(private val scope: CoroutineScope) {
     private fun filterParams(): List<Pair<String, String>> = buildList {
         if (company != "SAG") add("company[]" to company)
         val k = fKind; val v = fValue
-        if (k != null && v != null) add((when (k) { "bucket" -> "bucket[]"; "status" -> "status[]"; "sales" -> "sales[]"; else -> "pic[]" }) to v)
+        if (k != null && v != null) add((when (k) {
+            "bucket" -> "bucket[]"; "status" -> "status[]"; "sales" -> "sales[]"; "pic" -> "pic[]"
+            "customer" -> "customer[]"; "item" -> "item_list[]"; "order_date" -> "request_date[]"; else -> "due_date[]"
+        }) to v)
         if (query.isNotBlank()) add("search" to query.trim())
+        start?.let { add("start" to it) }
+        finish?.let { add("finish" to it) }
     }
 
     /** withSummary=false untuk paging tabel saja (lebih ringan; kartu tetap memakai data terakhir). */
@@ -89,6 +98,13 @@ class PohState(private val scope: CoroutineScope) {
     fun selectCompany(key: String) {
         if (company == key) return
         company = key; resetAndRefresh()
+    }
+
+    /** Atur periode; v = null mengembalikan ke default server. Tanggal awal tidak boleh melewati tanggal akhir. */
+    fun setPeriod(isStart: Boolean, v: String?) {
+        if (isStart) { start = v; if (v != null) finish?.let { if (it < v) finish = v } }
+        else { finish = v; if (v != null) start?.let { if (it > v) start = v } }
+        resetAndRefresh()
     }
 
     /** Ketik di kotak search: dikirim ke server setelah jeda singkat. */

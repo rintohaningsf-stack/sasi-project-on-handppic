@@ -394,7 +394,20 @@ val W = listOf(46, 242, 311, 121, 109, 110, 123, 99, 132, 130, 126, 109, 110)
 val HEAD = listOf("NO.", "CUSTOMER", "ITEM LIST", "ORDER DATE", "DUE DATE", "SALES", "RAW MATERIAL", "WIP", "START PROJECT", "PROGRESS (%)", "EST FINISH", "PIC", "STATUS")
 val FILTER_COLS = setOf(1, 2, 3, 4, 5, 8, 10, 11, 12)
 
-@Composable fun RowScope.Cell(i: Int, c: @Composable ColumnScope.() -> Unit) = Column(Modifier.weight(W[i].toFloat()).padding(horizontal = if (i == 0) 6.dp else 12.dp), Arrangement.Center, content = c)
+/** Sel tabel. Jika kind & value diisi, sel bisa ditekan untuk memfilter (tekan lagi = lepas). */
+@Composable fun RowScope.Cell(i: Int, kind: String? = null, value: String = "", st: PohState? = null, c: @Composable ColumnScope.() -> Unit) {
+    if (kind != null && st != null && value.isNotBlank()) {
+        Box(Modifier.weight(W[i].toFloat()).padding(horizontal = 6.dp)) {
+            FilterBox(Modifier.fillMaxWidth(), Purple, st.isSelected(kind, value), 8, { st.toggle(kind, value) }) {
+                Column(Modifier.padding(horizontal = 6.dp, vertical = 2.dp), Arrangement.Center, content = c)
+            }
+        }
+    } else {
+        Column(Modifier.weight(W[i].toFloat()).padding(horizontal = if (i == 0) 6.dp else 12.dp), Arrangement.Center, content = c)
+    }
+}
+
+fun idv(i: Int) = if (i > 0) "$i" else ""
 
 @Composable fun Bar(frac: Float, c: Color) = Box(Modifier.size(62.dp, 5.dp).clip(CircleShape).background(Color(0xFFF1F1F1))) { Box(Modifier.fillMaxWidth(frac.coerceIn(0f, 1f)).fillMaxHeight().background(c)) }
 
@@ -412,21 +425,32 @@ val FILTER_COLS = setOf(1, 2, 3, 4, 5, 8, 10, 11, 12)
 }
 
 @Composable fun ProjectTable(d: PohData, state: PohState) = Card(Modifier.fillMaxWidth(), 16) {
+    var picking by remember { mutableStateOf<String?>(null) }   // "start" | "finish" | null
+    picking?.let { which ->
+        val isStart = which == "start"
+        PeriodPicker(
+            if (isStart) "Periode Awal" else "Periode Akhir",
+            if (isStart) state.start ?: d.periodeStart else state.finish ?: d.periodeFinish,
+            onPick = { state.setPeriod(isStart, it); picking = null },
+            onClear = { state.setPeriod(isStart, null); picking = null },
+            onDismiss = { picking = null }
+        )
+    }
     Column(Modifier.padding(16.dp)) {
         Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), Arrangement.SpaceBetween, Alignment.CenterVertically) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.height(39.dp).clip(RoundedCornerShape(10.dp)).border(1.dp, Color(0xFFE9ECEF), RoundedCornerShape(10.dp)).padding(3.dp), verticalAlignment = Alignment.CenterVertically) {
                     T("Periode :", 12f, Color(0xFF475569), FontWeight.Medium, Modifier.padding(start = 9.dp, end = 12.dp))
                     Row(Modifier.height(32.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFFF9FAFB)).border(1.dp, Color(0xFFD9DCE3), RoundedCornerShape(8.dp)), verticalAlignment = Alignment.CenterVertically) {
-                        DateBox(fmtDate(d.periodeStart))
+                        DateBox(fmtDate(state.start ?: d.periodeStart)) { picking = "start" }
                         Box(Modifier.fillMaxHeight().background(Color.White).padding(horizontal = 12.dp), Alignment.Center) { T("To", 12f, Color(0xFF333333), FontWeight.Medium) }
-                        DateBox(fmtDate(d.periodeFinish))
+                        DateBox(fmtDate(state.finish ?: d.periodeFinish)) { picking = "finish" }
                     }
                 }
                 Box(Modifier.width(1.dp).height(24.dp).background(Line))
                 Row(Modifier.size(211.dp, 32.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFFFAFAFA)).border(1.dp, Color(0xFFEEEEF0), RoundedCornerShape(8.dp)).padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Ico(AppIcons.Search, 18, 18); Spacer(Modifier.width(10.dp))
-                    SearchField(state.query, "Search Here", { state.onQuery(it) }, { state.searchNow() }, Modifier.weight(1f).padding(end = 10.dp))
+                    SearchField(state.query, "Cari SO Project", { state.onQuery(it) }, { state.searchNow() }, Modifier.weight(1f).padding(end = 10.dp))
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -453,19 +477,19 @@ val FILTER_COLS = setOf(1, 2, 3, 4, 5, 8, 10, 11, 12)
                 Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFE3E4E5)))
                 Row(Modifier.fillMaxWidth().height(68.dp).background(if (idx % 2 == 0) Color.White else Color(0xFFF9FBFC)), verticalAlignment = Alignment.CenterVertically) {
                     Cell(0) { T("${idx + 1}", 14f, Color(0xFF333333)) }
-                    Cell(1) { Row(verticalAlignment = Alignment.CenterVertically) {
+                    Cell(1, "customer", r.customer, state) { Row(verticalAlignment = Alignment.CenterVertically) {
                         if (r.companyImage != null) NetImage(r.companyImage, Modifier.size(18.dp, 17.dp), contentScale = androidx.compose.ui.layout.ContentScale.Fit) else Ico(AppIcons.Kmi, 18, 17)
                         Spacer(Modifier.width(3.dp)); Box(Modifier.size(2.dp, 17.dp).clip(CircleShape).background(if (r.typeColor == "pink") Color(0xFFEC4899) else Green)); Spacer(Modifier.width(3.dp))
                         Column(Modifier.weight(1f)) { Text(r.customer, color = Color(0xFF333333), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis); T(r.doc, 12f, Color(0xFF0066FE), FontWeight.Medium) }
                     } }
-                    Cell(2) { Row(verticalAlignment = Alignment.CenterVertically) {
+                    Cell(2, "item", idv(r.itemId), state) { Row(verticalAlignment = Alignment.CenterVertically) {
                         NetImage(r.itemPicture, Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFFFBFBFB)).border(1.dp, Color(0xFFE2E4E4), RoundedCornerShape(12.dp)))
                         Spacer(Modifier.width(7.dp))
                         Column(Modifier.weight(1f)) { F(r.itemName, 14f, Color(0xFF333333)); T(r.itemCode, 12f, Color(0xFF9D9D9D), FontWeight.Normal); Chip("Product", Green, Color(0xFFEEFFF5), Color(0xFFB2ECCB), 11f) }
                         if (r.itemExtra > 0) { Spacer(Modifier.width(12.dp)); Chip("+${r.itemExtra}", Purple, Color(0xFFF3E7FF), Color(0xFFCEB0FA), 14f, 4) }
                     } }
-                    Cell(3) { T(r.orderDate, 14f, Color(0xFF333333)) }
-                    Cell(4) {
+                    Cell(3, "order_date", r.reqDate, state) { T(r.orderDate, 14f, Color(0xFF333333)) }
+                    Cell(4, "due_date", r.dueRaw, state) {
                         T(r.dueLabel, 14f, sc)
                         // Icon calendar + Lead Time; jika overdue: pemisah "|" + teks overdue (merah)
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -476,18 +500,18 @@ val FILTER_COLS = setOf(1, 2, 3, 4, 5, 8, 10, 11, 12)
                             }
                         }
                     }
-                    Cell(5) { Row(verticalAlignment = Alignment.CenterVertically) { Avatar(r.salesImage, R.drawable.avatar_sales, 28); Spacer(Modifier.width(6.dp)); F(r.sales, 14f, Color(0xFF333333)) } }
+                    Cell(5, "sales", idv(r.salesId), state) { Row(verticalAlignment = Alignment.CenterVertically) { Avatar(r.salesImage, R.drawable.avatar_sales, 28); Spacer(Modifier.width(6.dp)); F(r.sales, 14f, Color(0xFF333333)) } }
                     Cell(6) { Row(verticalAlignment = Alignment.CenterVertically) { Bar(r.rawPct / 100f, Green); Spacer(Modifier.width(10.dp)); T("${r.rawPct}%", 14f, Green) }; Spacer(Modifier.height(2.dp)); StockItem("${r.rawDone}", "/${r.rawTotal}") }
                     Cell(7) { StockItem("${r.wipGood}", "/${r.wipTotal}") }
                     Cell(8) { DateStack(r.startActual, r.startPlan, namedColor(r.startActualColor)) }
                     Cell(9) { val c = if (r.isOverdue && r.progress < 100) Red else Green
                         Row(verticalAlignment = Alignment.CenterVertically) { Bar(r.progress / 100f, c); Spacer(Modifier.width(10.dp)); T("${r.progress}%", 12f, c) } }
                     Cell(10) { DateStack(r.finishActual, r.finishPlan, namedColor(r.finishActualColor)) }
-                    Cell(11) {
+                    Cell(11, "pic", if (r.pic.isBlank()) "" else idv(r.picId), state) {
                         // Tidak ada PIC (null / kosong / "-") -> blank
                         if (r.pic.isNotBlank()) Row(verticalAlignment = Alignment.CenterVertically) { Avatar(r.picImage, R.drawable.avatar_pic, 28); Spacer(Modifier.width(6.dp)); F(r.pic, 14f, Color(0xFF333333)) }
                     }
-                    Cell(12) { Box(Modifier.fillMaxWidth(), Alignment.Center) {
+                    Cell(12, "status", "${r.statusValue}", state) { Box(Modifier.fillMaxWidth(), Alignment.Center) {
                         Box(Modifier.clip(RoundedCornerShape(8.dp)).background(statusColor(r.statusValue)).padding(horizontal = 8.dp, vertical = 5.dp)) { F(r.statusName, 14f, Color.White) }
                     } }
                 }
@@ -507,7 +531,7 @@ val FILTER_COLS = setOf(1, 2, 3, 4, 5, 8, 10, 11, 12)
     }
 }
 
-@Composable fun DateBox(d: String) = Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+@Composable fun DateBox(d: String, onClick: () -> Unit) = Row(Modifier.fillMaxHeight().clickable(onClick = onClick).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
     Ico(AppIcons.Calendar, 16, 16); Spacer(Modifier.width(8.dp)); T(d, 12f, Color(0xFF333333), FontWeight.Medium)
 }
 
@@ -518,6 +542,54 @@ val FILTER_COLS = setOf(1, 2, 3, 4, 5, 8, 10, 11, 12)
         logo(); Spacer(Modifier.width(8.dp)); T(name, 13f, Color(0xFF1E293B)); Spacer(Modifier.width(8.dp))
         Box(Modifier.defaultMinSize(30.dp).height(22.dp).clip(CircleShape).background(if (active) Color(0xFF8A00FF) else Color(0xFFB0B4C2)).padding(horizontal = 8.dp), Alignment.Center) { T("$count", 13f, Color.White, FontWeight.Medium) }
     }
+
+/** Pemilih tanggal sederhana (kalender bulanan, minggu mulai Senin). Memilih tanggal = langsung menerapkan periode. */
+@Composable fun PeriodPicker(title: String, initial: String?, onPick: (String) -> Unit, onClear: () -> Unit, onDismiss: () -> Unit) {
+    val id = Locale.forLanguageTag("id-ID")
+    val init = remember(initial) {
+        Calendar.getInstance().also { c -> initial?.let { s -> runCatching { ISO.parse(s.take(10)) }.getOrNull()?.let { c.time = it } } }
+    }
+    var year by remember(initial) { mutableStateOf(init.get(Calendar.YEAR)) }
+    var month by remember(initial) { mutableStateOf(init.get(Calendar.MONTH)) }
+    val sel = initial?.take(10)
+    val cal = Calendar.getInstance().apply { clear(); set(year, month, 1) }
+    val offset = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7        // Senin = 0
+    val days = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+    val cells: List<Int?> = (List(offset) { null } + (1..days).toList()).let { it + List((7 - it.size % 7) % 7) { null } }
+
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(Modifier.width(420.dp).clip(RoundedCornerShape(20.dp)).background(Color.White).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            T(title, 20f)
+            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                FilterBox(Modifier.size(36.dp), Purple, false, 8, { if (month == 0) { month = 11; year-- } else month-- }) { Box(Modifier.fillMaxSize(), Alignment.Center) { T("‹", 24f, Slate) } }
+                T(SimpleDateFormat("MMMM yyyy", id).format(cal.time), 18f)
+                FilterBox(Modifier.size(36.dp), Purple, false, 8, { if (month == 11) { month = 0; year++ } else month++ }) { Box(Modifier.fillMaxSize(), Alignment.Center) { T("›", 24f, Slate) } }
+            }
+            Row(Modifier.fillMaxWidth()) {
+                listOf("Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min").forEach { Box(Modifier.weight(1f), Alignment.Center) { T(it, 12f, Slate, FontWeight.Medium) } }
+            }
+            cells.chunked(7).forEach { week ->
+                Row(Modifier.fillMaxWidth()) {
+                    week.forEach { day ->
+                        Box(Modifier.weight(1f).height(44.dp), Alignment.Center) {
+                            if (day != null) {
+                                val iso = String.format(Locale.US, "%04d-%02d-%02d", year, month + 1, day)
+                                val on = iso == sel
+                                Box(Modifier.size(40.dp).clip(CircleShape).background(if (on) Purple else Color.Transparent).clickable { onPick(iso) }, Alignment.Center) {
+                                    T("$day", 14f, if (on) Color.White else Ink, FontWeight.Medium)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(10.dp)) {
+                FilterBox(Modifier.weight(1f).height(36.dp), Red, false, 8, onClear) { Box(Modifier.fillMaxSize().border(1.dp, Line, RoundedCornerShape(8.dp)), Alignment.Center) { T("Reset", 13f, Red, FontWeight.Medium) } }
+                FilterBox(Modifier.weight(1f).height(36.dp), Slate, false, 8, onDismiss) { Box(Modifier.fillMaxSize().border(1.dp, Line, RoundedCornerShape(8.dp)), Alignment.Center) { T("Batal", 13f, Slate, FontWeight.Medium) } }
+            }
+        }
+    }
+}
 
 /** Input teks satu baris dengan placeholder (dipakai di tabel dan modal Others). */
 @Composable fun SearchField(value: String, hint: String, onChange: (String) -> Unit, onSearch: () -> Unit, m: Modifier = Modifier) {

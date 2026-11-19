@@ -37,7 +37,9 @@ data class TRow(
     val startActual: String?, val startPlan: String?, val startActualColor: String,
     val finishActual: String?, val finishPlan: String?, val finishActualColor: String,
     val progress: Int, val pic: String, val picImage: String?,
-    val statusName: String, val statusValue: Int
+    val statusName: String, val statusValue: Int,
+    // nilai untuk filter saat sel tabel ditekan
+    val itemId: Int = 0, val reqDate: String = "", val dueRaw: String = "", val salesId: Int = 0, val picId: Int = 0
 )
 
 data class PohData(
@@ -121,7 +123,9 @@ object PohParser {
             startActual = o.s("start_actual_label"), startPlan = o.s("start_plan_label"), startActualColor = o.s("start_actual_color") ?: "",
             finishActual = o.s("finish_actual_label"), finishPlan = o.s("finish_plan_label"), finishActualColor = o.s("finish_actual_color") ?: "",
             progress = o.i("process_pct"), pic = o.s("pic")?.trim()?.takeIf { it != "-" && it != "–" } ?: "", picImage = o.s("pic_image"),
-            statusName = o.s("status_name") ?: "-", statusValue = o.i("status_value")
+            statusName = o.s("status_name") ?: "-", statusValue = o.i("status_value"),
+            itemId = first?.i("idItem") ?: 0, reqDate = o.s("req_date") ?: o.s("order_date_raw") ?: "",
+            dueRaw = o.s("due_date") ?: "", salesId = o.i("sales_id"), picId = o.i("pic_id")
         )
     }
 }
