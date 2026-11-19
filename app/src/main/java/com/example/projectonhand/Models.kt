@@ -46,6 +46,9 @@ data class PohData(
     val rows: List<TRow>, val total: Int
 )
 
+/** Isi modal "Others" satu section. */
+data class OthersData(val total: Int, val hasMore: Boolean, val rows: List<SRowData>)
+
 // ---------- parser ----------
 private fun JSONObject.s(k: String): String? = if (isNull(k)) null else optString(k).ifEmpty { null }
 private fun JSONObject.i(k: String): Int = if (isNull(k)) 0 else optInt(k)
@@ -69,6 +72,12 @@ object PohParser {
             total = table?.i("total") ?: rows.size
         )
     }
+
+    fun parseOthers(root: JSONObject) = OthersData(
+        total = root.i("total"),
+        hasMore = root.optBoolean("has_more", false),
+        rows = root.optJSONArray("rows").list(::srow)
+    )
 
     private fun totals(o: JSONObject?) = if (o == null) Totals() else Totals(o.i("count"), o.i("item"), o.i("unit"))
 

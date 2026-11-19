@@ -12,6 +12,14 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -153,10 +161,11 @@ fun statusIcon(v: Int): ImageVector = when (v) {
             .padding(start = 28.dp, end = 24.dp, top = 28.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(9.dp)
     ) {
+        if (state.othersKey != null) OthersDialog(state)
         if (d == null) Splash(state) else {
             state.error?.let { T("Gagal menyegarkan data: $it", 12f, Red) }
             val s = state.view(d.summary ?: SummaryData.EMPTY)
-            Header(s, state); KpiRow(s, state); Summary(s); ProjectTable(d, state)
+            Header(s, state); KpiRow(s, state); Summary(s, state); ProjectTable(d, state)
         }
     }
 }
@@ -315,7 +324,7 @@ fun statusIcon(v: Int): ImageVector = when (v) {
     Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFCBD5E1).copy(alpha = .7f)))
 }
 
-@Composable fun SCard(title: String, count: String, ic: Color, icon: ImageVector, other: Int, body: @Composable ColumnScope.() -> Unit) = Card(Modifier.fillMaxHeight(), 16) {
+@Composable fun SCard(title: String, count: String, ic: Color, icon: ImageVector, other: Int, onOther: () -> Unit, body: @Composable ColumnScope.() -> Unit) = Card(Modifier.fillMaxHeight(), 16) {
     Column(Modifier.padding(16.dp).heightIn(min = 184.dp)) {
         Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) { IconSq(icon, ic.copy(alpha = .15f)); Spacer(Modifier.width(8.dp)); F(title, 14f) }
@@ -324,16 +333,22 @@ fun statusIcon(v: Int): ImageVector = when (v) {
         }
         Spacer(Modifier.height(3.dp)); body()
         if (other > 0) {
-            Spacer(Modifier.weight(1f, false)); Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) { T("Other", 12f, Color(0xFF333333), FontWeight.Normal); Spacer(Modifier.width(6.dp)); Chip("+$other", Purple, Color(0xFFF5F0FF), Color(0xFFDDD0FA)) }
+            Spacer(Modifier.weight(1f, false))
+            // Tekan "Other +N" -> modal daftar lengkap
+            Box(Modifier.padding(top = 6.dp)) {
+                FilterBox(Modifier, Purple, false, 8, onOther) {
+                    Row(Modifier.padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) { T("Other", 12f, Color(0xFF333333), FontWeight.Normal); Spacer(Modifier.width(6.dp)); Chip("+$other", Purple, Color(0xFFF5F0FF), Color(0xFFDDD0FA)) }
+                }
+            }
         }
     }
 }
 
-@Composable fun Summary(s: SummaryData) = Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max), Arrangement.spacedBy(5.dp)) {
-    s.cards.forEach { c -> Box(Modifier.weight(1f)) { SummaryCardView(c) } }
+@Composable fun Summary(s: SummaryData, state: PohState) = Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max), Arrangement.spacedBy(5.dp)) {
+    s.cards.forEach { c -> Box(Modifier.weight(1f)) { SummaryCardView(c, state) } }
 }
 
-@Composable fun SummaryCardView(c: SummaryCard) {
+@Composable fun SummaryCardView(c: SummaryCard, state: PohState) {
     val (ic, icon) = when (c.key) {
         "categories" -> Color(0xFFD97706) to AppIcons.Categories
         "customers" -> Purple to AppIcons.Customer
@@ -342,28 +357,34 @@ fun statusIcon(v: Int): ImageVector = when (v) {
         "risks" -> Color(0xFFD97706) to AppIcons.Delay
         else -> Green to AppIcons.Truck
     }
-    val palette = listOf(Color(0xFF16A34A), Color(0xFFEC4899), Color(0xFF2563EB))
-    SCard(c.title, "${c.total}", ic, icon, c.otherCount) {
+    SCard(c.title, "${c.total}", ic, icon, c.otherCount, { state.openOthers(c.key, c.title) }) {
         // Tidak ada data -> keterangan di tengah kartu
         if (c.rows.isEmpty()) Box(Modifier.fillMaxWidth().height(120.dp), Alignment.Center) {
             F("No ${c.title} Data Found", 14f, Color(0xFF9D9D9D), FontWeight.Medium)
         }
-        c.rows.take(3).forEachIndexed { idx, r ->
-            val iu: @Composable () -> Unit = { ItemUnit("${r.item} Item", "${r.unit} Unit") }
-            val so: @Composable () -> Unit = { T(r.doc, 12f, Blue, FontWeight.Medium) }
-            when (c.key) {
-                "categories" -> {
-                    val col = if (r.color.isNotEmpty()) namedColor(r.color) else palette[idx % palette.size]
-                    SRow(r.name, { Box(Modifier.size(3.dp, 26.dp).clip(CircleShape).background(col)) }, iu) { SoChip("${r.count} Project") }
-                }
-                "customers" -> SRow(r.name, sub = iu) { SoChip("${r.count} SO") }
-                "products" -> SRow(r.name, { NetImage(r.image, Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFFF3F3F4))) },
-                    { T(r.code, 12f, Color(0xFF9D9D9D), FontWeight.Normal) }) { SoChip("${r.count} SO"); T("${r.unit} Unit", 12f, Slate) }
-                "overdue" -> SRow(r.name, sub = so) { Chip(dayText(r.days), Red, Color(0xFFFEE2E2), Color(0xFFFEE2E2), 14f); T(fmtDate(r.dueDate), 12f, Slate, FontWeight.Normal) }
-                "risks" -> SRow(r.name, sub = so) { T(fmtDate(r.dueDate), 14f, Red); T("+${r.days} Day", 12f, Red, FontWeight.Normal) }
-                else -> SRow(r.name, sub = { T("${r.item} Item • ${r.unit} Unit", 12f, Slate, FontWeight.Normal) }) { T(fmtDate(r.dueDate), 14f); T(dayText(r.days), 12f, Blue, FontWeight.Normal) }
+        c.rows.take(3).forEachIndexed { idx, r -> CardRow(c.key, r, idx) }
+    }
+}
+
+/** Satu baris isi kartu ringkasan; dipakai di kartu dan di modal Others agar tampilannya sama. */
+@Composable fun CardRow(key: String, r: SRowData, idx: Int) {
+    val palette = listOf(Color(0xFF16A34A), Color(0xFFEC4899), Color(0xFF2563EB))
+    run { run {
+        val iu: @Composable () -> Unit = { ItemUnit("${r.item} Item", "${r.unit} Unit") }
+        val so: @Composable () -> Unit = { T(r.doc, 12f, Blue, FontWeight.Medium) }
+        when (key) {
+            "categories" -> {
+                val col = if (r.color.isNotEmpty()) namedColor(r.color) else palette[idx % palette.size]
+                SRow(r.name, { Box(Modifier.size(3.dp, 26.dp).clip(CircleShape).background(col)) }, iu) { SoChip("${r.count} Project") }
             }
+            "customers" -> SRow(r.name, sub = iu) { SoChip("${r.count} SO") }
+            "products" -> SRow(r.name, { NetImage(r.image, Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFFF3F3F4))) },
+                { T(r.code, 12f, Color(0xFF9D9D9D), FontWeight.Normal) }) { SoChip("${r.count} SO"); T("${r.unit} Unit", 12f, Slate) }
+            "overdue" -> SRow(r.name, sub = so) { Chip(dayText(r.days), Red, Color(0xFFFEE2E2), Color(0xFFFEE2E2), 14f); T(fmtDate(r.dueDate), 12f, Slate, FontWeight.Normal) }
+            "risks" -> SRow(r.name, sub = so) { T(fmtDate(r.dueDate), 14f, Red); T("+${r.days} Day", 12f, Red, FontWeight.Normal) }
+            else -> SRow(r.name, sub = { T("${r.item} Item • ${r.unit} Unit", 12f, Slate, FontWeight.Normal) }) { T(fmtDate(r.dueDate), 14f); T(dayText(r.days), 12f, Blue, FontWeight.Normal) }
         }
+    }
     }
 }
 
@@ -404,7 +425,8 @@ val FILTER_COLS = setOf(1, 2, 3, 4, 5, 8, 10, 11, 12)
                 }
                 Box(Modifier.width(1.dp).height(24.dp).background(Line))
                 Row(Modifier.size(211.dp, 32.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFFFAFAFA)).border(1.dp, Color(0xFFEEEEF0), RoundedCornerShape(8.dp)).padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Ico(AppIcons.Search, 18, 18); Spacer(Modifier.width(10.dp)); T("Search Here", 12f, Color(0xFFCBD5E1), FontWeight.Normal)
+                    Ico(AppIcons.Search, 18, 18); Spacer(Modifier.width(10.dp))
+                    SearchField(state.query, "Search Here", { state.onQuery(it) }, { state.searchNow() }, Modifier.weight(1f).padding(end = 10.dp))
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -496,6 +518,51 @@ val FILTER_COLS = setOf(1, 2, 3, 4, 5, 8, 10, 11, 12)
         logo(); Spacer(Modifier.width(8.dp)); T(name, 13f, Color(0xFF1E293B)); Spacer(Modifier.width(8.dp))
         Box(Modifier.defaultMinSize(30.dp).height(22.dp).clip(CircleShape).background(if (active) Color(0xFF8A00FF) else Color(0xFFB0B4C2)).padding(horizontal = 8.dp), Alignment.Center) { T("$count", 13f, Color.White, FontWeight.Medium) }
     }
+
+/** Input teks satu baris dengan placeholder (dipakai di tabel dan modal Others). */
+@Composable fun SearchField(value: String, hint: String, onChange: (String) -> Unit, onSearch: () -> Unit, m: Modifier = Modifier) {
+    BasicTextField(
+        value = value, onValueChange = onChange, modifier = m, singleLine = true,
+        textStyle = TextStyle(fontSize = 12.sp, color = Color(0xFF333333), fontWeight = FontWeight.Medium),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+        cursorBrush = SolidColor(Purple),
+        decorationBox = { inner ->
+            Box(contentAlignment = Alignment.CenterStart) {
+                if (value.isEmpty()) T(hint, 12f, Color(0xFFCBD5E1), FontWeight.Normal)
+                inner()
+            }
+        }
+    )
+}
+
+/** Modal "Others": daftar lengkap satu section kartu, dengan pencarian dan Show More. */
+@Composable fun OthersDialog(state: PohState) {
+    val key = state.othersKey ?: ""
+    Dialog(onDismissRequest = { state.closeOthers() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(Modifier.width(760.dp).clip(RoundedCornerShape(20.dp)).background(Color.White).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    T(state.othersTitle, 22f)
+                    Box(Modifier.defaultMinSize(32.dp).height(28.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFFF9FBFC)).border(1.dp, Color(0xFFE2E4E4), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp), Alignment.Center) { T("${state.othersTotal}", 16f) }
+                }
+                FilterBox(Modifier.size(32.dp), Slate, false, 8, { state.closeOthers() }) { Box(Modifier.fillMaxSize(), Alignment.Center) { T("✕", 16f, Slate) } }
+            }
+            Row(Modifier.fillMaxWidth().height(36.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFFFAFAFA)).border(1.dp, Color(0xFFEEEEF0), RoundedCornerShape(8.dp)).padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Ico(AppIcons.Search, 18, 18); Spacer(Modifier.width(10.dp))
+                SearchField(state.othersQuery, "Search Here", { state.onOthersQuery(it) }, { state.onOthersQuery(state.othersQuery) }, Modifier.weight(1f).padding(end = 10.dp))
+            }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Line))
+            Column(Modifier.fillMaxWidth().height(460.dp).verticalScroll(rememberScrollState())) {
+                state.othersRows.forEachIndexed { i, r -> CardRow(key, r, i) }
+                if (state.othersLoading) Box(Modifier.fillMaxWidth().padding(16.dp), Alignment.Center) { T("Memuat…", 14f, Slate, FontWeight.Medium) }
+                else if (state.othersError != null) Box(Modifier.fillMaxWidth().padding(16.dp), Alignment.Center) { T(state.othersError ?: "", 14f, Red, FontWeight.Medium) }
+                else if (state.othersRows.isEmpty()) Box(Modifier.fillMaxWidth().height(200.dp), Alignment.Center) { T("No ${state.othersTitle} Data Found", 16f, Color(0xFF9D9D9D), FontWeight.Medium) }
+                else if (state.othersHasMore) Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), Alignment.Center) { ShowBtn("Show More", AppIcons.ShowMore, Color(0xFF0799EC)) { state.othersMore() } }
+            }
+        }
+    }
+}
 
 /** Tombol pagination mengikuti CSS: 197x30, bg #f8f9fa, border #dfe3e6, radius 7, gap 8, font 13 / 500. */
 @Composable fun ShowBtn(label: String, icon: ImageVector, color: Color, enabled: Boolean = true, onClick: () -> Unit) =

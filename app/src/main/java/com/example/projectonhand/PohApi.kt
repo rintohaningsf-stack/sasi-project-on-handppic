@@ -10,6 +10,7 @@ import java.net.URLEncoder
 /** Client API Project On Hand PPIC (Bearer token Sanctum, login otomatis + relogin saat 401). */
 object PohApi {
     @Volatile private var token: String? = null
+    private const val BASE = "/api/project-on-hand-ppic/project-list"
 
     private fun http(method: String, url: String, body: String? = null): Pair<Int, String> {
         val c = URL(url).openConnection() as HttpURLConnection
@@ -41,13 +42,22 @@ object PohApi {
     private fun query(params: List<Pair<String, String>>) =
         params.joinToString("&") { (k, v) -> URLEncoder.encode(k, "UTF-8") + "=" + URLEncoder.encode(v, "UTF-8") }
 
-    /** GET /api/project-on-hand-ppic/project-list */
-    suspend fun fetchList(params: List<Pair<String, String>>): PohData = withContext(Dispatchers.IO) {
-        val url = ApiConfig.BASE_URL + "/api/project-on-hand-ppic/project-list?" + query(params)
+    /** GET dengan login otomatis dan satu kali relogin saat 401. */
+    private fun getJson(url: String): JSONObject {
         if (token == null) login()
         var res = http("GET", url)
         if (res.first == 401) { login(); res = http("GET", url) }
         if (res.first !in 200..299) error("Server error (HTTP ${res.first})")
-        PohParser.parse(JSONObject(res.second))
+        return JSONObject(res.second)
+    }
+
+    /** GET /api/project-on-hand-ppic/project-list */
+    suspend fun fetchList(params: List<Pair<String, String>>): PohData = withContext(Dispatchers.IO) {
+        PohParser.parse(getJson(ApiConfig.BASE_URL + BASE + "?" + query(params)))
+    }
+
+    /** GET /api/project-on-hand-ppic/project-list/others (isi modal Others) */
+    suspend fun fetchOthers(params: List<Pair<String, String>>): OthersData = withContext(Dispatchers.IO) {
+        PohParser.parseOthers(getJson(ApiConfig.BASE_URL + BASE + "/others?" + query(params)))
     }
 }
