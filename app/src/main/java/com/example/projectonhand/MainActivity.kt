@@ -6,6 +6,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -152,8 +155,8 @@ fun statusIcon(v: Int): ImageVector = when (v) {
     ) {
         if (d == null) Splash(state) else {
             state.error?.let { T("Gagal menyegarkan data: $it", 12f, Red) }
-            val s = d.summary ?: SummaryData.EMPTY
-            Header(s); KpiRow(s); Summary(s); ProjectTable(d, state)
+            val s = state.view(d.summary ?: SummaryData.EMPTY)
+            Header(s, state); KpiRow(s, state); Summary(s); ProjectTable(d, state)
         }
     }
 }
@@ -166,17 +169,34 @@ fun statusIcon(v: Int): ImageVector = when (v) {
     }
 }
 
-@Composable fun Health(title: String, pct: String, n: String, fg: Color, bg: Color, bc: Color, w: Int, icon: ImageVector) =
-    Column(Modifier.width(w.dp).height(66.dp).clip(RoundedCornerShape(12.dp)).background(bg).border(1.dp, bc, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 7.dp), Arrangement.SpaceBetween) {
+/** Kotak jadwal yang bisa ditekan: hover/tekan memberi warna, terpilih = border tebal + warna lebih pekat. */
+@Composable fun Health(title: String, pct: String, n: String, fg: Color, bg: Color, bc: Color, w: Int, icon: ImageVector, selected: Boolean, onClick: () -> Unit) {
+    val src = remember { MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val hovered by src.collectIsHoveredAsState()
+    val shape = RoundedCornerShape(12.dp)
+    val fill = when {
+        pressed -> fg.copy(alpha = .22f)
+        selected -> fg.copy(alpha = .14f)
+        hovered -> fg.copy(alpha = .08f)
+        else -> Color.Transparent
+    }
+    Column(
+        Modifier.width(w.dp).height(66.dp).clip(shape).background(bg).background(fill)
+            .border(if (selected) 2.dp else 1.dp, if (selected) fg else bc, shape)
+            .hoverable(src).clickable(interactionSource = src, indication = null, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 7.dp), Arrangement.SpaceBetween
+    ) {
         Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
             Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(18.dp).clip(RoundedCornerShape(4.dp)).background(Color.White), Alignment.Center) { Ico(icon, 11, 11) }; Spacer(Modifier.width(6.dp)); F(title, 12f, fg) }
             Chip(pct, fg, Color.White, bc, 10f, 20)
         }
         Row(verticalAlignment = Alignment.Bottom) { T(n, 24f); Spacer(Modifier.width(6.dp)); T("Projects", 12f, Slate, FontWeight.Medium) }
     }
+}
 
-@Composable fun Header(s: SummaryData) {
-    val tot = s.total.count
+@Composable fun Header(s: SummaryData, state: PohState) {
+    val tot = state.totalForPercent(s)
     fun b(k: String) = s.buckets.firstOrNull { it.key == k }?.count ?: 0
     fun pct(n: Int) = if (tot > 0) "%.1f%%".format(Locale.US, n * 100f / tot) else "0%"
     Row(Modifier.fillMaxWidth().height(116.dp), Arrangement.spacedBy(14.dp)) {
@@ -186,9 +206,9 @@ fun statusIcon(v: Int): ImageVector = when (v) {
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) { T("Project On Hand", 30f); T("Executive overview of active project categories, live customer pipeline.", 14f, Slate, FontWeight.Normal) }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Health("Ahead Schedule", pct(b("ahead")), "${b("ahead")}", Color(0xFF0B5FE8), Color(0xFFE6EFFE), Color(0xFFB1CDF8), 195, AppIcons.Bolt)
-                    Health("On Schedule", pct(b("on_track")), "${b("on_track")}", Color(0xFF16C55E), Color(0xFFEEFFF5), Color(0xFFB2ECD0), 174, AppIcons.CheckCircle)
-                    Health("Running Late", pct(b("overdue")), "${b("overdue")}", Color(0xFFEF4444), Color(0xFFFFEBEB), Color(0xFFFBC4C4), 174, AppIcons.Warning)
+                    Health("Ahead Schedule", pct(b("ahead")), "${b("ahead")}", Color(0xFF0B5FE8), Color(0xFFE6EFFE), Color(0xFFB1CDF8), 195, AppIcons.Bolt, state.bucket == "ahead") { state.toggleBucket("ahead") }
+                    Health("On Schedule", pct(b("on_track")), "${b("on_track")}", Color(0xFF16C55E), Color(0xFFEEFFF5), Color(0xFFB2ECD0), 174, AppIcons.CheckCircle, state.bucket == "on_track") { state.toggleBucket("on_track") }
+                    Health("Running Late", pct(b("overdue")), "${b("overdue")}", Color(0xFFEF4444), Color(0xFFFFEBEB), Color(0xFFFBC4C4), 174, AppIcons.Warning, state.bucket == "overdue") { state.toggleBucket("overdue") }
                 }
             }
         }
@@ -211,7 +231,26 @@ fun statusIcon(v: Int): ImageVector = when (v) {
     }
 }
 
-@Composable fun KpiRow(s: SummaryData) = Card(Modifier.fillMaxWidth(), 12) {
+/** Pembungkus yang bisa ditekan: hover/tekan memberi warna, terpilih = border tebal + warna pekat. */
+@Composable fun FilterBox(m: Modifier, color: Color, selected: Boolean, r: Int, onClick: () -> Unit, content: @Composable BoxScope.() -> Unit) {
+    val src = remember { MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val hovered by src.collectIsHoveredAsState()
+    val shape = RoundedCornerShape(r.dp)
+    val fill = when {
+        pressed -> color.copy(alpha = .22f)
+        selected -> color.copy(alpha = .12f)
+        hovered -> color.copy(alpha = .07f)
+        else -> Color.Transparent
+    }
+    Box(m.clip(shape).hoverable(src).clickable(interactionSource = src, indication = null, onClick = onClick)) {
+        content()
+        Box(Modifier.matchParentSize().background(fill))
+        if (selected) Box(Modifier.matchParentSize().border(2.dp, color, shape))
+    }
+}
+
+@Composable fun KpiRow(s: SummaryData, state: PohState) = Card(Modifier.fillMaxWidth(), 12) {
     Row(Modifier.padding(8.dp), Arrangement.spacedBy(7.dp), Alignment.CenterVertically) {
         Card(Modifier.width(219.dp).height(99.dp), 16, Color(0xFFFAF4FF), Color(0xFFCEB0FA)) {
             Column(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.Center) {
@@ -225,17 +264,19 @@ fun statusIcon(v: Int): ImageVector = when (v) {
                 val pal = statusPal(k.value)
                 fun c(i: Int) = Color(("FF" + pal[i]).toLong(16))
                 val pct = if (s.total.count > 0) "%.1f%%".format(Locale.US, k.count * 100f / s.total.count) else "0%"
-                Card(Modifier.weight(1f).height(87.dp)) {
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), Arrangement.spacedBy(4.dp)) {
-                        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-                            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) { IconSq(statusIcon(k.value), c(0), c(1)); Spacer(Modifier.width(6.dp)); F(k.label, 14f, Color(0xFF1E293B)) }
-                            Chip(pct, c(1), c(2), c(3), 10f, 20)
-                        }
-                        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-                            T("${k.count}", 24f)
-                            Column(horizontalAlignment = Alignment.End) {
-                                Row(verticalAlignment = Alignment.CenterVertically) { Ico(AppIcons.Stock, 10, 11, Purple); Spacer(Modifier.width(4.dp)); T("${k.item} Item", 12f, Slate) }
-                                Row(verticalAlignment = Alignment.CenterVertically) { Ico(AppIcons.Stock, 10, 11, Blue); Spacer(Modifier.width(4.dp)); T("${k.unit} Unit", 12f, Slate) }
+                FilterBox(Modifier.weight(1f).height(87.dp), c(1), state.isSelected("status", "${k.value}"), 16, { state.toggle("status", "${k.value}") }) {
+                    Card(Modifier.fillMaxSize()) {
+                        Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), Arrangement.spacedBy(4.dp)) {
+                            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) { IconSq(statusIcon(k.value), c(0), c(1)); Spacer(Modifier.width(6.dp)); F(k.label, 14f, Color(0xFF1E293B)) }
+                                Chip(pct, c(1), c(2), c(3), 10f, 20)
+                            }
+                            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                                T("${k.count}", 24f)
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) { Ico(AppIcons.Stock, 10, 11, Purple); Spacer(Modifier.width(4.dp)); T("${k.item} Item", 12f, Slate) }
+                                    Row(verticalAlignment = Alignment.CenterVertically) { Ico(AppIcons.Stock, 10, 11, Blue); Spacer(Modifier.width(4.dp)); T("${k.unit} Unit", 12f, Slate) }
+                                }
                             }
                         }
                     }
@@ -243,18 +284,21 @@ fun statusIcon(v: Int): ImageVector = when (v) {
             }
         }
         Box(Modifier.width(1.dp).height(79.dp).background(Line))
-        People("Sales On Hand", Purple, s.sales); People("PIC On Hand", Blue, s.pics)
+        People("Sales On Hand", Purple, s.sales, "sales", state); People("PIC On Hand", Blue, s.pics, "pic", state)
     }
 }
 
-@Composable fun People(title: String, badge: Color, rows: List<PersonRow>) = Card(Modifier.width(295.dp).height(99.dp)) {
-    Column(Modifier.padding(start = 16.dp, top = 12.dp)) {
-        T(title, 14f, Color(0xFF1E293B)); Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+@Composable fun People(title: String, badge: Color, rows: List<PersonRow>, kind: String, state: PohState) = Card(Modifier.width(295.dp).height(99.dp)) {
+    Column(Modifier.padding(start = 10.dp, top = 12.dp)) {
+        T(title, 14f, Color(0xFF1E293B), m = Modifier.padding(start = 6.dp)); Spacer(Modifier.height(4.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
             rows.take(2).forEach { p ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box { Avatar(p.image, R.drawable.avatar_card); Box(Modifier.align(Alignment.TopEnd).offset(7.dp, (-5).dp).defaultMinSize(24.dp).height(16.dp).clip(RoundedCornerShape(6.dp)).background(badge).padding(horizontal = 3.dp), Alignment.Center) { T("${p.count}", 11f, Color.White) } }
-                    Spacer(Modifier.width(8.dp)); F(p.label, 14f, Color(0xFF1E293B), m = Modifier.widthIn(max = 70.dp))
+                // Tekan foto/nama = filter data berdasarkan orang ini; tekan lagi = lepas
+                FilterBox(Modifier, badge, state.isSelected(kind, "${p.value}"), 10, { state.toggle(kind, "${p.value}") }) {
+                    Row(Modifier.padding(start = 6.dp, top = 8.dp, end = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box { Avatar(p.image, R.drawable.avatar_card); Box(Modifier.align(Alignment.TopEnd).offset(7.dp, (-5).dp).defaultMinSize(24.dp).height(16.dp).clip(RoundedCornerShape(6.dp)).background(badge).padding(horizontal = 3.dp), Alignment.Center) { T("${p.count}", 11f, Color.White) } }
+                        Spacer(Modifier.width(8.dp)); F(p.label, 14f, Color(0xFF1E293B), m = Modifier.widthIn(max = 70.dp))
+                    }
                 }
             }
         }
@@ -300,6 +344,10 @@ fun statusIcon(v: Int): ImageVector = when (v) {
     }
     val palette = listOf(Color(0xFF16A34A), Color(0xFFEC4899), Color(0xFF2563EB))
     SCard(c.title, "${c.total}", ic, icon, c.otherCount) {
+        // Tidak ada data -> keterangan di tengah kartu
+        if (c.rows.isEmpty()) Box(Modifier.fillMaxWidth().height(120.dp), Alignment.Center) {
+            F("No ${c.title} Data Found", 14f, Color(0xFF9D9D9D), FontWeight.Medium)
+        }
         c.rows.take(3).forEachIndexed { idx, r ->
             val iu: @Composable () -> Unit = { ItemUnit("${r.item} Item", "${r.unit} Unit") }
             val so: @Composable () -> Unit = { T(r.doc, 12f, Blue, FontWeight.Medium) }
@@ -335,7 +383,11 @@ val FILTER_COLS = setOf(1, 2, 3, 4, 5, 8, 10, 11, 12)
 
 /** Atas = tanggal aktual/estimasi, bawah = tanggal plan (kecil, abu-abu). */
 @Composable fun DateStack(actual: String?, plan: String?, color: Color) {
-    T(actual ?: "-", 14f, color); T(plan ?: "-", 12f, Color(0xFF9D9D9D), FontWeight.Normal)
+    // Nilai null / kosong -> blank (tidak ada teks "-")
+    val a = actual?.trim()?.takeIf { it.isNotEmpty() && it != "-" }
+    val p = plan?.trim()?.takeIf { it.isNotEmpty() && it != "-" }
+    if (a != null) T(a, 14f, color) else if (p != null) Spacer(Modifier.height(20.dp))
+    if (p != null) T(p, 12f, Color(0xFF9D9D9D), FontWeight.Normal)
 }
 
 @Composable fun ProjectTable(d: PohData, state: PohState) = Card(Modifier.fillMaxWidth(), 16) {
@@ -410,12 +462,8 @@ val FILTER_COLS = setOf(1, 2, 3, 4, 5, 8, 10, 11, 12)
                         Row(verticalAlignment = Alignment.CenterVertically) { Bar(r.progress / 100f, c); Spacer(Modifier.width(10.dp)); T("${r.progress}%", 12f, c) } }
                     Cell(10) { DateStack(r.finishActual, r.finishPlan, namedColor(r.finishActualColor)) }
                     Cell(11) {
-                        // Nilai kosong / "-" = Tidak ada PIC: gambar kosong + keterangan "Tidak ada PIC"
-                        if (r.pic.isBlank()) Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(28.dp).clip(CircleShape).background(Color(0xFFF3F3F4))); Spacer(Modifier.width(6.dp))
-                            F("Tidak ada PIC", 14f, Color(0xFF9D9D9D), FontWeight.Medium, Modifier.weight(1f, false))
-                        }
-                        else Row(verticalAlignment = Alignment.CenterVertically) { Avatar(r.picImage, R.drawable.avatar_pic, 28); Spacer(Modifier.width(6.dp)); F(r.pic, 14f, Color(0xFF333333)) }
+                        // Tidak ada PIC (null / kosong / "-") -> blank
+                        if (r.pic.isNotBlank()) Row(verticalAlignment = Alignment.CenterVertically) { Avatar(r.picImage, R.drawable.avatar_pic, 28); Spacer(Modifier.width(6.dp)); F(r.pic, 14f, Color(0xFF333333)) }
                     }
                     Cell(12) { Box(Modifier.fillMaxWidth(), Alignment.Center) {
                         Box(Modifier.clip(RoundedCornerShape(8.dp)).background(statusColor(r.statusValue)).padding(horizontal = 8.dp, vertical = 5.dp)) { F(r.statusName, 14f, Color.White) }

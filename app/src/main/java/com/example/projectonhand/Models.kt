@@ -6,7 +6,7 @@ import org.json.JSONObject
 data class Totals(val count: Int = 0, val item: Int = 0, val unit: Int = 0)
 data class StatusCard(val value: Int, val label: String, val count: Int, val item: Int, val unit: Int)
 data class Bucket(val key: String, val label: String, val count: Int)
-data class PersonRow(val label: String, val image: String?, val count: Int)
+data class PersonRow(val label: String, val image: String?, val count: Int, val value: Int = 0)
 data class Pill(val key: String, val label: String, val count: Int)
 
 /** Baris generik untuk 6 kartu summary (field yang tidak dipakai section tertentu = default). */
@@ -73,7 +73,7 @@ object PohParser {
     private fun totals(o: JSONObject?) = if (o == null) Totals() else Totals(o.i("count"), o.i("item"), o.i("unit"))
 
     private fun people(o: JSONObject?): List<PersonRow> =
-        o?.optJSONArray("rows").list { PersonRow(it.s("label") ?: "-", it.s("image"), it.i("count")) }
+        o?.optJSONArray("rows").list { PersonRow(it.s("label") ?: "-", it.s("image"), it.i("count"), it.i("value")) }
 
     private fun summary(o: JSONObject) = SummaryData(
         total = totals(o.optJSONObject("total_projects")),
